@@ -5,7 +5,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from fastapi import FastAPI
+# your other imports (Base, engine, etc.)
 
+app = FastAPI()
+
+@app.on_event("startup")
+def init_db():
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("Database tables verified/created successfully.")
+    except Exception as e:
+        print(f"Error initializing database tables: {e}")
 DATABASE_URL = os.getenv(
     "DATABASE_URL", 
     "postgresql://dbuser:StrongPassword123@postgres-service.three-tier-app.svc.cluster.local:5432/userdb"
