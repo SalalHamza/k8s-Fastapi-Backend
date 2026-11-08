@@ -31,10 +31,45 @@ jobs:
           key: ${{ secrets.K8S_SSH_KEY }}
           port: 22
           script: |
-            mkdir -p ~/deployments/backend
-            cd ~/deployments/backend
-            if [ -d ".git" ]; then git pull origin main; else git clone https://github.com/${{ github.repository }}.git .; fi
-            sed -i "s|DOCKERHUB_USERNAME|${{ secrets.DOCKERHUB_USERNAME }}|g" k8s/backend-deployment.yaml
-            kubectl apply -f k8s/backend-deployment.yaml
+            cat <<'EOF' | sed "s|DOCKERHUB_USERNAME|${{ secrets.DOCKERHUB_USERNAME }}|g" | kubectl apply -f -
+            apiVersion: apps/v1
+            kind: Deployment
+            metadata:
+              name: fastapi-backend
+              namespace: three-tier-app
+            spec:
+              replicas: 2
+              selector:
+                matchLabels:
+                  app: backend
+              template:
+                metadata:
+                  labels:
+                    app: backend
+                spec:
+                  containers:
+                    - name: backend
+                      image: DOCKERHUB_USERNAME/fastapi-backend:latest
+                      imagePullPolicy: Always
+                      ports:
+                        - containerPort: 8000
+                      env:
+                        - name: DATABASE_URL
+                          value: "postgresql://dbuser:StrongPassword123@postgres-service.three-tier-app.svc.cluster.local:5432/userdb"
+            ---
+            apiVersion: v1
+            kind: Service
+            metadata:
+              name: backend-service
+              namespace: three-tier-app
+            spec:
+              type: NodePort
+              ports:
+                - port: 8000
+                  targetPort: 8000
+                  nodePort: 30008
+              selector:
+                app: backend
+            EOF
             kubectl rollout restart deployment/fastapi-backend -n three-tier-app
-            kubectl rollout status deployment/fastapi-backend -n three-tier-app --timeout=120s
+            kubectl rollout status deployment/fastapi-backend -n three-tier-app --timeout=60s
